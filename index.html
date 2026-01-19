@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 50px;
+            animation: fadeInDown 0.8s ease;
+        }
+
+        header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+            letter-spacing: 1px;
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .sensors-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .sensor-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+            animation: fadeInUp 0.6s ease;
+        }
+
+        .sensor-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            border-color: #667eea;
+        }
+
+        .sensor-header {
+            margin-bottom: 20px;
+        }
+
+        .sensor-name {
+            font-size: 1.4em;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .sensor-type {
+            font-size: 0.85em;
+            color: white;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: inline-block;
+            font-weight: 600;
+        }
+
+        .sensor-value-section {
+            background: linear-gradient(135deg, #f5f7ff 0%, #f0f0f5 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .actual-value-label {
+            font-size: 0.8em;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .sensor-value {
+            font-size: 2.3em;
+            font-weight: 800;
+            color: #667eea;
+            margin: 10px 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .sensor-unit {
+            font-size: 0.95em;
+            color: #a0aec0;
+            font-weight: 500;
+            display: inline;
+        }
+
+        .sensor-range {
+            font-size: 0.85em;
+            color: #718096;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+            font-weight: 500;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 280px;
+            margin-top: 25px;
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .chart-title {
+            font-size: 0.85em;
+            color: #6b7280;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.2em;
+            margin: 50px 0;
+        }
+
+        .error {
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            max-width: 1200px;
+            margin: 20px auto;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 60px;
+            opacity: 0.9;
+            font-size: 0.95em;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Sensor Dashboard</h1>
+        <p>Real-time sensor data monitoring</p>
+    </header>
+    
+    <main>
+        <div class="sensors-container" id="sensorsContainer">
+            <div class="loading">Loading sensor data...</div>
+        </div>
+    </main>
+
+    <script>
+        let chartInstances = {}; // Przechowuj instancje wykresów
+        let sensorsData = []; // Przechowuj ostatnie dane
+
+        // Funkcja do pobierania danych z API
+        async function fetchSensorData() {
+            try {
+                const response = await fetch('/api/data_sensor');
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch sensor data');
+                }
+                
+                const data = await response.json();
+                sensorsData = data;
+                
+                // Jeśli to pierwszy raz, narysuj strukturę
+                if (Object.keys(chartInstances).length === 0) {
+                    displaySensors(data);
+                } else {
+                    // Inaczej tylko update wartości
+                    updateSensorValues(data);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('sensorsContainer').innerHTML = 
+                    '<div class="error">❌ Error loading sensor data. Is the Flask server running?</div>';
+            }
+        }
+
+        // Funkcja do początkowego wyświetlania danych
+        function displaySensors(sensors) {
+            const container = document.getElementById('sensorsContainer');
+            
+            if (sensors.length === 0) {
+                container.innerHTML = '<div class="error">No sensors available</div>';
+                return;
+            }
+            
+            container.innerHTML = sensors.map((sensor, index) => `
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <div class="sensor-name">${sensor.name}</div>
+                        <div class="sensor-type">${sensor.type}</div>
+                    </div>
+                    <div class="sensor-value-section">
+                        <div class="actual-value-label">⚡ Actual Value</div>
+                        <div class="sensor-value" id="value-${index}">${sensor.actual_value}<span class="sensor-unit"> ${sensor.unit}</span></div>
+                    </div>
+                    <div class="sensor-range">Range: ${sensor.range}</div>
+                    <div class="chart-container">
+                        <div class="chart-title">Historical Data</div>
+                        <canvas id="chart-${index}"></canvas>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Rysuj wykresy dla każdego sensora
+            sensors.forEach((sensor, index) => {
+                fetchHistoryAndChart(sensor.name, index, sensor.unit);
+            });
+        }
+
+        // Funkcja do aktualizacji tylko wartości (bez pełnego refresh)
+        function updateSensorValues(sensors) {
+            sensors.forEach((sensor, index) => {
+                const valueElement = document.getElementById(`value-${index}`);
+                if (valueElement) {
+                    valueElement.innerHTML = `${sensor.actual_value}<span class="sensor-unit"> ${sensor.unit}</span>`;
+                }
+            });
+            
+            // Aktualizuj wykresy
+            sensors.forEach((sensor, index) => {
+                updateChart(sensor.name, index);
+            });
+        }
+
+        // Funkcja do pobierania historii i rysowania wykresu
+        async function fetchHistoryAndChart(sensorName, index, unit) {
+            try {
+                const response = await fetch(`/api/history/${sensorName}`);
+                const history = await response.json();
+                
+                if (history.length === 0) return;
+                
+                // Przygotuj dane dla wykresu
+                const labels = history.reverse().map(h => 
+                    new Date(h.timestamp).toLocaleTimeString('pl-PL', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        second: '2-digit'
+                    })
+                );
+                const values = history.map(h => h.value);
+                
+                // Rysuj wykres
+                const ctx = document.getElementById(`chart-${index}`).getContext('2d');
+                chartInstances[index] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: sensorName,
+                            data: values,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: true,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#667eea'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                title: {
+                                    display: true,
+                                    text: unit
+                                }
+                            },
+                            x: {
+                                display: true,
+                                max: 10
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error(`Error loading history for ${sensorName}:`, error);
+            }
+        }
+
+        // Funkcja do aktualizacji wykresu (bez tworzenia nowego)
+        async function updateChart(sensorName, index) {
+            try {
+                const response = await fetch(`/api/history/${sensorName}`);
+                const history = await response.json();
+                
+                if (history.length === 0 || !chartInstances[index]) return;
+                
+                // Przygotuj nowe dane
+                const labels = history.reverse().map(h => 
+                    new Date(h.timestamp).toLocaleTimeString('pl-PL', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        second: '2-digit'
+                    })
+                );
+                const values = history.map(h => h.value);
+                
+                // Aktualizuj dane w istniejącym wykresie
+                chartInstances[index].data.labels = labels;
+                chartInstances[index].data.datasets[0].data = values;
+                chartInstances[index].update('none'); // Update bez animacji
+            } catch (error) {
+                console.error(`Error updating chart for ${sensorName}:`, error);
+            }
+        }
+
+        // Załaduj dane przy otwarciu strony
+        fetchSensorData();
+        
+        // Odśwież dane co 5 sekund (ale bez pełnego refresh strony)
+        setInterval(fetchSensorData, 5000);
+    </script>
+</body>
+</html>
